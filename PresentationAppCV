@@ -1,57 +1,98 @@
-import cv2
 from cvzone.HandTrackingModule import HandDetector
+import cv2
 import numpy as np
-import math
-import time
-cap = cv2.VideoCapture(1)
-detector = HandDetector(maxHands=1)
+import win32com.client
 
-offset = 20
-imgSize = 300
+# Parameters
+width, height = 600, 620
+gestureThreshold = 300
+current_slide = 1
 
-folder = "Data/Heart"
-counter= 0
+# Connect to PowerPoint
+ppt_app = win32com.client.Dispatch("PowerPoint.Application")
+presentation = ppt_app.Presentations.Open("")  # Replace with your presentation file path
+
+#Move Slide to the Right
+def next_slide():
+    global current_slide
+    if current_slide < presentation.Slides.Count:
+        current_slide += 1
+        presentation.SlideShowWindow.View.GotoSlide(current_slide)
+
+#Move Slide to the Left
+def previous_slide():
+    global current_slide
+    if current_slide > 1:
+        current_slide -= 1
+        presentation.SlideShowWindow.View.GotoSlide(current_slide)
+
+#Invoke Slide Show
+def start_slide_show():
+    presentation.SlideShowSettings.Run()
+
+
+# Camera Setup
+cap = cv2.VideoCapture(0)
+cap.set(3, width)
+cap.set(4, height)
+
+# Hand Detector
+detectorHand = HandDetector(detectionCon=0.8, maxHands=1)
+
+# Variables
+imgList = []
+delay = 30
+buttonPressed = False
+counter = 0
+imgNumber = 0
+delayCounter = 0
+
+
 
 while True:
-    _, img = cap.read()
-    hands, img = detector.findHands(img)
-    if  hands:
+    # Get Webcam Frame
+    success, img = cap.read()
+    img = cv2.flip(img, 1)
+
+    # Find the hand and landmarks
+    hands, img = detectorHand.findHands(img)  # with draw
+    # Draw Gesture Threshold line
+    cv2.line(img, (0, gestureThreshold), (width, gestureThreshold), (0, 255, 0), 10)
+
+    if hands and buttonPressed is False:  # If hand is detected
+
         hand = hands[0]
-        x, y, w, h = hand['bbox']
+        cx, cy = hand["center"]
+        lmList = hand["lmList"]  # List of 21 Landmark points
+        fingers = detectorHand.fingersUp(hand)  # List of which fingers are up
 
-        imgWhite = np.ones((imgSize, imgSize, 3), np.uint8) * 255
+        # Constrain values for easier drawing
+        xVal = int(np.interp(lmList[8][0], [width // 2, width], [0, width]))
+        yVal = int(np.interp(lmList[8][1], [150, height-150], [0, height]))
+        indexFinger = xVal, yVal
 
-        imgCrop = img[y- offset:y + h + offset, x - offset:x + w + offset]
+        if cy <= gestureThreshold:  # If hand is at the height of the face
+            if fingers == [1, 0, 0, 0, 0]:
+                print("Left")
+                buttonPressed = True
+                next_slide()
+            if fingers == [0, 0, 0, 0, 1]:
+                print("Right")
+                buttonPressed = True
+                previous_slide()
+            if fingers == [1, 1, 0, 0, 1]:
+                start_slide_show()
 
-        imgCropShape = imgCrop.shape
-
-
-        aspectRatio = h/w
-
-        if aspectRatio > 1:
-            k = imgSize/h
-            wCal = math.ceil(k*w)
-            imgResize = cv2.resize(imgCrop,(wCal, imgSize))
-            imgResizeShape = imgResize.shape
-            wGAp = math.ceil((imgSize-wCal)/2)
-            imgWhite[:wGAp, :wCal+wGAp ] = imgResize
-
-        else:
-            k = imgSize / w
-            hCal = math.ceil(k * h)
-            imgResize = cv2.resize(imgCrop, (imgSize, hCal))
-            imgResizeShape = imgResize.shape
-            hGap = math.ceil((imgSize - hCal) / 2)
-            imgWhite[hGap:hCal + hGap, :] = imgResize
-
-        cv2.imshow("Image crop", imgCrop)
-        cv2.imshow("Image White", imgWhite)
-
+    if buttonPressed:
+        counter += 1
+        if counter > delay:
+            counter = 0
+            buttonPressed = False
 
 
     cv2.imshow("Image", img)
+
+    #Press Q to Stop
     key = cv2.waitKey(1)
-    if key == ord("s"):
-        counter += 1
-        cv2.imwrite(f'{folder}/Image_{time.time()}.jpg', imgWhite)
-        print(counter)
+    if key == ord('q'):
+        break
