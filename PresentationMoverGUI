@@ -1,0 +1,45 @@
+import tkinter as tk
+from tkinter import ttk
+import win32com.client
+
+# Connect to PowerPoint
+ppt_app = win32com.client.Dispatch("PowerPoint.Application")
+presentation = ppt_app.Presentations.Open("")  # Replace it with your presentation file path
+
+current_slide = 1  # Initialize with the first slide
+
+#Change Slide Forward
+def next_slide():
+    global current_slide
+    if current_slide < presentation.Slides.Count:
+        current_slide += 1
+        presentation.SlideShowWindow.View.GotoSlide(current_slide)
+
+#Change Slide Backward
+def previous_slide():
+    global current_slide
+    if current_slide > 1:
+        current_slide -= 1
+        presentation.SlideShowWindow.View.GotoSlide(current_slide)
+
+#Invoke Slide Show
+def start_slide_show():
+    presentation.SlideShowSettings.Run()
+
+# Create the GUI
+app = tk.Tk()
+app.title("PowerPoint Slide Navigator")
+
+frame = ttk.Frame(app, padding=10)
+frame.grid(column=0, row=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+next_button = ttk.Button(frame, text="Next Slide", command=next_slide)
+next_button.grid(column=0, row=0)
+
+previous_button = ttk.Button(frame, text="Previous Slide", command=previous_slide)
+previous_button.grid(column=1, row=0)
+
+start_button = ttk.Button(frame, text="Start Slide Show", command=start_slide_show)
+start_button.grid(column=2, row=0)
+
+app.mainloop()
